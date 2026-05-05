@@ -6,14 +6,10 @@ IMPORTANT: All logging goes to file/stderr. stdout is reserved for MCP stdio pro
 
 from __future__ import annotations
 
-import logging
-import sys
-from pathlib import Path
-
-import structlog
 from fastmcp import FastMCP
 
 from wind_vane.db.connection import AsyncSessionLocal
+from wind_vane.log import setup_logging
 from wind_vane.toolkits.crawlers.bahamut_search import bahamut_search
 from wind_vane.toolkits.crawlers.dcard_search import dcard_search
 from wind_vane.toolkits.crawlers.exchange_rate import exchange_rate
@@ -27,21 +23,7 @@ from wind_vane.toolkits.queries.query_recommendations import query_recommendatio
 from wind_vane.toolkits.queries.query_review import query_review, query_review_update
 from wind_vane.toolkits.queries.top_posts import top_posts
 
-LOG_DIR = Path.home() / "AppData" / "Local" / "wind-vane-mcp" / "logs"
-LOG_DIR.mkdir(parents=True, exist_ok=True)
-
-logging.basicConfig(
-    filename=str(LOG_DIR / "server.log"),
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s %(message)s",
-    stream=None,
-)
-structlog.configure(
-    processors=[
-        structlog.processors.TimeStamper(fmt="iso"),
-        structlog.dev.ConsoleRenderer(file=sys.stderr),
-    ]
-)
+setup_logging()
 
 mcp = FastMCP("wind-vane")
 
