@@ -1,4 +1,25 @@
-"""Async fixtures for in-memory SQLite testing."""
+"""Async fixtures for in-memory SQLite testing.
+
+PostgreSQL-specific column types (ARRAY, JSONB, TIMESTAMPTZ) are substituted
+with SQLite-compatible equivalents before wind_vane models are imported.
+"""
+
+import sqlalchemy
+import sqlalchemy.dialects.postgresql as _pg
+
+
+class _TextArray(sqlalchemy.Text):
+    """Stand-in for postgresql.ARRAY that compiles to TEXT in SQLite."""
+    def __init__(self, item_type=None, *args, **kwargs):
+        super().__init__()
+
+
+# Patch PG-specific types before wind_vane.db.models is imported
+_pg.ARRAY = _TextArray          # type: ignore[assignment]
+_pg.JSONB = sqlalchemy.JSON     # type: ignore[assignment]
+_pg.TIMESTAMPTZ = sqlalchemy.DateTime  # type: ignore[assignment]
+
+# --- fixtures ---
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
