@@ -1,0 +1,14 @@
+[database]
+url = "${DATABASE_URL}"
+
+[notifier]
+enabled = true
+email_to = "jarry@example.com"
+email_from = "wind-vane-notifier@localhost"
+
+[notifier.smtp]
+host = "smtp.gmail.com"
+port = 587
+username = "your-gmail@gmail.com"
+password = "${SMTP_PASSWORD}"
+use_tls = true
