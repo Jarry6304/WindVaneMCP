@@ -61,6 +61,13 @@ def _check_r2(sq: SearchQuery) -> bool:
 
 def _check_r3(sq: SearchQuery) -> str | None:
     """R3: Deprecate queries unused for 90+ days."""
-    if sq.last_used_at and sq.last_used_at < datetime.now(UTC) - timedelta(days=90):
+    if not sq.last_used_at:
+        return None
+    cutoff = datetime.now(UTC) - timedelta(days=90)
+    last = sq.last_used_at
+    # SQLite strips timezone info; normalize to offset-aware for safe comparison
+    if last.tzinfo is None:
+        last = last.replace(tzinfo=UTC)
+    if last < cutoff:
         return "deprecated"
     return None
