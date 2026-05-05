@@ -2,7 +2,7 @@
 name = "wind-vane-mcp"
 version = "0.1.0"
 description = "風向計 MCP Server — 台灣論壇代購情報爬蟲系統"
-requires-python = ">=3.12"
+requires-python = ">=3.12,<3.14"
 dependencies = [
     "fastmcp>=2.0",
     "crawlee[playwright,beautifulsoup]>=1.3",

@@ -9,24 +9,35 @@ FastMCP + Crawlee + PostgreSQL 17 的論壇爬蟲與情報彙整系統。
 
 | 項目 | 版本 |
 |---|---|
-| Python | 3.12+ |
+| Python | 3.12（**不支援 3.14**，asyncpg C extension 尚未相容） |
 | PostgreSQL | 17（本機） |
 | uv | 最新版 |
 | Playwright Chromium | 透過 `uv run playwright install chromium` 安裝 |
 
+> **重要**：uv 在 Python 3.14 環境下 asyncpg 會失敗。  
+> 專案內含 `.python-version` 鎖定 Python 3.12。若 uv 仍選到 3.14，請先執行：
+> ```powershell
+> uv python install 3.12
+> ```
+
 ---
 
 ## 一、安裝
+
+以下指令在 **PowerShell**（Windows Terminal）中執行。
 
 ```powershell
 # 1. clone 專案
 git clone https://github.com/Jarry6304/WindVaneMCP.git
 cd WindVaneMCP
 
-# 2. 安裝所有相依套件（含 dev 工具）
+# 2. 安裝 Python 3.12（若尚未安裝）
+uv python install 3.12
+
+# 3. 安裝所有相依套件（含 dev 工具）
 uv sync --extra dev
 
-# 3. 安裝 Playwright Chromium（巴哈姆特爬蟲需要）
+# 4. 安裝 Playwright Chromium（巴哈姆特爬蟲需要）
 uv run playwright install chromium
 ```
 
@@ -36,16 +47,31 @@ uv run playwright install chromium
 
 ### 2.1 建立 PostgreSQL 資料庫
 
-```sql
--- 以 postgres 超級使用者執行
-CREATE DATABASE wind_vane;
-CREATE USER windvane WITH PASSWORD 'your_password';
-GRANT ALL PRIVILEGES ON DATABASE wind_vane TO windvane;
+開啟 **psql**（以 postgres 超級使用者）並執行以下指令（每行分開執行，避免 `--` 被 PowerShell 解析）：
+
+```powershell
+psql -U postgres -c "CREATE DATABASE wind_vane;"
+psql -U postgres -c "CREATE USER windvane WITH PASSWORD 'your_password';"
+psql -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE wind_vane TO windvane;"
 ```
 
-### 2.2 環境變數
+> **說明**：PowerShell 中 `--` 是特殊運算子，請勿將 SQL 連同 `--` 註解直接貼進 PowerShell。  
+> 若需要完整 SQL，請開啟 pgAdmin 或用 `psql` 互動模式執行。
 
-複製 `.env.example`（或直接建立 `.env`）：
+### 2.2 建立 .env 檔案
+
+在專案根目錄建立 `.env` 檔案（**不要**用 `KEY=VALUE` 直接在 PowerShell 設定環境變數，那樣不會被 uv 讀取）：
+
+```powershell
+# 方法一：用 PowerShell Set-Content 建立
+Set-Content -Path .env -Value "DATABASE_URL=postgresql+asyncpg://windvane:your_password@localhost:5432/wind_vane"
+Add-Content -Path .env -Value "SMTP_PASSWORD=your_gmail_app_password"
+
+# 方法二：直接用記事本開啟編輯
+notepad .env
+```
+
+`.env` 檔案內容格式（純文字，一行一個）：
 
 ```dotenv
 DATABASE_URL=postgresql+asyncpg://windvane:your_password@localhost:5432/wind_vane
@@ -61,7 +87,14 @@ uv run alembic upgrade head
 ### 2.4 匯入 Seed Data
 
 ```powershell
-uv run python -c "
+uv run python -c "import asyncio; from wind_vane.db.connection import AsyncSessionLocal; from wind_vane.db.seed import seed_all; asyncio.run((lambda: (lambda s: asyncio.ensure_future(seed_all(s)))(AsyncSessionLocal()))()); "
+```
+
+由於 PowerShell 的多行字串限制，建議改用下方方式：
+
+```powershell
+# 建立暫存 seed 腳本
+Set-Content -Path _seed.py -Value @"
 import asyncio
 from wind_vane.db.connection import AsyncSessionLocal
 from wind_vane.db.seed import seed_all
@@ -73,7 +106,12 @@ async def main():
         print('seed OK')
 
 asyncio.run(main())
-"
+"@
+
+uv run python _seed.py
+
+# 完成後刪除暫存檔
+Remove-Item _seed.py
 ```
 
 ---
@@ -102,8 +140,17 @@ asyncio.run(main())
 }
 ```
 
-> **注意**：`command` 需填寫 `uv.exe` 的完整路徑（`where uv` 可查詢）。  
-> Playwright 路徑若不符，巴哈姆特工具會無法啟動瀏覽器。
+查詢 `uv.exe` 完整路徑：
+
+```powershell
+where.exe uv
+```
+
+查詢 Playwright 瀏覽器安裝路徑：
+
+```powershell
+$env:LOCALAPPDATA + "\ms-playwright"
+```
 
 重新啟動 Claude Desktop，左下角 MCP 圖示應顯示 `wind-vane` 已連線。
 
@@ -115,7 +162,7 @@ asyncio.run(main())
 
 1. Google 帳號 → 安全性 → 兩步驟驗證（需開啟）
 2. 搜尋「應用程式密碼」→ 新增 → 選「其他」→ 輸入 `WindVane`
-3. 複製產生的 16 位密碼，填入 `SMTP_PASSWORD`
+3. 複製產生的 16 位密碼，填入 `.env` 的 `SMTP_PASSWORD`
 
 ### 4.2 通知設定（`config/settings.toml`）
 
@@ -136,8 +183,11 @@ use_tls  = true
 ### 4.3 Windows Task Scheduler — 每日自動檢查
 
 ```powershell
+$uvPath = (where.exe uv)[0]
+$projDir = (Get-Location).Path
+
 schtasks /create /tn "WindVane Notifier" `
-  /tr "C:\Users\jarry\.local\bin\uv.exe --directory D:\projects\WindVaneMCP run python -m wind_vane.notifier" `
+  /tr "`"$uvPath`" --directory `"$projDir`" run python -m wind_vane.notifier" `
   /sc daily /st 09:00 /ru SYSTEM
 ```
 
@@ -214,7 +264,7 @@ User → Claude：「給我本週戰鬥陀螺的代購情報」
 ## 八、開發測試
 
 ```powershell
-# 執行全部測試（163 個，使用 SQLite in-memory）
+# 執行全部測試（使用 SQLite in-memory，不需要 PostgreSQL）
 uv run --extra dev pytest tests/ -v
 
 # 只跑特定類別
@@ -244,6 +294,7 @@ uv run --extra dev pytest tests/test_post_filter_full.py -v
 
 ```
 WindVaneMCP/
+├── .python-version             # 鎖定 Python 3.12（asyncpg 不支援 3.14）
 ├── alembic/                    # DB migration
 │   └── versions/0001_initial_schema.py
 ├── config/
@@ -267,4 +318,36 @@ WindVaneMCP/
 │       │   └── ...
 │       └── queries/            # 5 支查詢工具
 └── claude_desktop_config.example.json
+```
+
+---
+
+## 常見問題
+
+### `No module named 'psycopg2'` 錯誤
+
+**原因**：asyncpg C extension 在 Python 3.14 上無法載入，SQLAlchemy 嘗試改用 psycopg2 但未安裝。
+
+**解法**：
+
+```powershell
+# 確認目前 Python 版本
+uv run python --version
+
+# 若顯示 3.14.x，強制安裝並切換到 3.12
+uv python install 3.12
+uv sync --python 3.12 --extra dev
+```
+
+### PowerShell 中 `--` 被誤解析
+
+PowerShell 將 `--` 視為參數分隔符號或一元運算子。  
+SQL 指令請透過 `psql -c "..."` 傳遞，不要直接在 PowerShell 貼上 SQL 多行文字。
+
+### `uv.exe` 找不到
+
+```powershell
+where.exe uv
+# 若找不到，確認 uv 已安裝：
+winget install astral-sh.uv
 ```
