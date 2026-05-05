@@ -351,3 +351,43 @@ where.exe uv
 # 若找不到，確認 uv 已安裝：
 winget install astral-sh.uv
 ```
+
+### `psql -U postgres` 密碼驗證失敗
+
+**原因**：安裝 PostgreSQL 時設定的 `postgres` 超級使用者密碼已遺忘或不符。
+
+**解法（Windows）**：
+
+1. 以系統管理員開啟記事本，編輯 `pg_hba.conf`：
+
+```powershell
+Start-Process notepad "C:\Program Files\PostgreSQL\17\data\pg_hba.conf" -Verb RunAs
+```
+
+2. 將檔案底部所有 `scram-sha-256`（或 `md5`）改為 `trust`，存檔。
+
+3. 重啟 PostgreSQL 服務（以系統管理員執行 PowerShell）：
+
+```powershell
+# 查詢實際服務名稱
+Get-Service | Where-Object { $_.Name -like "postgresql*" }
+
+# 重啟（以實際服務名稱替換）
+Restart-Service postgresql-x64-17
+```
+
+4. 重設密碼（這次不會詢問密碼）：
+
+```powershell
+psql -U postgres -c "ALTER USER postgres WITH PASSWORD 'new_password';"
+```
+
+5. 將 `pg_hba.conf` 的 `trust` 改回 `scram-sha-256`，再次重啟服務。
+
+6. 之後用新密碼正常建立資料庫：
+
+```powershell
+psql -U postgres -c "CREATE DATABASE wind_vane;"
+psql -U postgres -c "CREATE USER windvane WITH PASSWORD 'windvane';"
+psql -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE wind_vane TO windvane;"
+```
