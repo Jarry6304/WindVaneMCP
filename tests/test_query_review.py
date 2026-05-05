@@ -78,7 +78,7 @@ async def test_update_sets_manual_override(review_db):
 
     await query_review_update(review_db, query_id=sq.id, reason="LLM 判斷效果差")
 
-    await review_db.expire(sq)
+    review_db.expire(sq)
     await review_db.refresh(sq)
     assert sq.manual_override is True
     assert sq.override_reason == "LLM 判斷效果差"

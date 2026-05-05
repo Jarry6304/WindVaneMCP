@@ -10,16 +10,17 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime, timedelta
+from email.mime.text import MIMEText
 
 import aiosmtplib
 import structlog
-from email.mime.text import MIMEText
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from wind_vane.config import settings
 from wind_vane.db.connection import AsyncSessionLocal
 from wind_vane.db.models import SearchQuery, SystemNotification
+from wind_vane.log import setup_logging
 
 log = structlog.get_logger()
 
@@ -50,7 +51,8 @@ async def _is_quarterly_review_due(session: AsyncSession) -> bool:
     ).scalar_one_or_none()
     if not oldest:
         return False
-    if oldest < datetime.now(UTC) - timedelta(days=90):
+    oldest_utc = oldest.replace(tzinfo=UTC) if oldest.tzinfo is None else oldest
+    if oldest_utc < datetime.now(UTC) - timedelta(days=90):
         last = (
             await session.execute(
                 select(SystemNotification)
@@ -131,7 +133,7 @@ def _build_rule_drift_email(notif: SystemNotification) -> str:
     return (
         "風向計規則漂移警示\n\n"
         "目前有 20 筆以上的查詢被標記為 needs_optimization。\n"
-        "建議透過 Claude 執行 tool_query_review(filter='needs_optimization') 進行優化。\n"
+        "建議透過 Claude 執行 tool_query_review(filter_type='needs_optimization') 進行優化。\n"
     )
 
 
@@ -178,4 +180,5 @@ async def _send_email(notif: SystemNotification, body: str) -> None:
 
 
 if __name__ == "__main__":
+    setup_logging()
     asyncio.run(run_notification_check())
