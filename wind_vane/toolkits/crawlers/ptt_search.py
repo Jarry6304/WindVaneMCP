@@ -2,22 +2,34 @@
 
 from __future__ import annotations
 
-import re
-from datetime import datetime, timezone
 from urllib.parse import urlencode, urljoin
 
 import structlog
+from crawlee import Request
 from crawlee.beautifulsoup_crawler import BeautifulSoupCrawler, BeautifulSoupCrawlingContext
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from wind_vane.db.models import Forum, ForumBoard, ForumSearchOperator
-from wind_vane.toolkits.crawlers.upsert import upsert_post, upsert_search_query
+from wind_vane.toolkits.crawlers.upsert import log_crawl_finish, log_crawl_start, upsert_post, upsert_search_query
 
 log = structlog.get_logger()
 
 PTT_BASE = "https://www.ptt.cc"
-OVER18_COOKIE = {"over18": "1"}
+
+
+def _parse_push(text: str) -> tuple[int, int]:
+    """Return (pushes, boos) from PTT's nrec span text."""
+    t = text.strip()
+    if t == "爆":
+        return 100, 0
+    if t in ("X", "XX"):
+        return 0, 100
+    try:
+        n = int(t)
+        return (n, 0) if n >= 0 else (0, abs(n))
+    except ValueError:
+        return 0, 0
 
 
 async def ptt_search(
@@ -66,7 +78,7 @@ async def ptt_search(
     async def handler(ctx: BeautifulSoupCrawlingContext) -> None:
         soup = ctx.parsed_content
         if soup.select_one("div.over18-notice"):
-            log.warning("ptt_search: hit over18 gate, cookie may be missing")
+            log.warning("ptt_search: over18 gate hit — cookie missing?")
             return
 
         for entry in soup.select("div.r-ent")[:limit]:
@@ -77,27 +89,29 @@ async def ptt_search(
             post_url = urljoin(PTT_BASE, href)
 
             push_tag = entry.select_one("div.nrec span")
-            push_text = push_tag.text.strip() if push_tag else "0"
-            try:
-                pushes = int(push_text) if push_text.isdigit() else (100 if push_text == "爆" else 0)
-            except ValueError:
-                pushes = 0
-
-            date_tag = entry.select_one("div.date")
-            meta_tag = entry.select_one("div.meta div.author")
+            pushes, boos = _parse_push(push_tag.text if push_tag else "0")
+            author_tag = entry.select_one("div.meta div.author")
 
             collected.append({
                 "title": title_tag.text.strip(),
-                "author": meta_tag.text.strip() if meta_tag else None,
+                "author": author_tag.text.strip() if author_tag else None,
                 "url": post_url,
                 "pushes": pushes,
-                "boos": 0,
-                "comment_count": pushes,
-                "content": None,
-                "posted_at": None,
+                "boos": boos,
+                "comment_count": pushes + boos,
             })
 
-    await crawler.run([{"url": search_url, "headers": {}, "user_data": {"cookies": OVER18_COOKIE}}])
+    crawl_log = await log_crawl_start(session, forum.id, "ptt_search", keyword)
+    error_msg: str | None = None
+    try:
+        request = Request.from_url(
+            search_url,
+            headers={"Cookie": "over18=1"},
+        )
+        await crawler.run([request])
+    except Exception as exc:
+        error_msg = str(exc)
+        log.error("ptt_search: crawler failed", exc=error_msg)
 
     results = []
     new_count = 0
@@ -110,8 +124,8 @@ async def ptt_search(
             url=item["url"],
             title=item["title"],
             author=item.get("author"),
-            content=item.get("content"),
-            posted_at=item.get("posted_at"),
+            content=None,
+            posted_at=None,
             pushes=item["pushes"],
             boos=item["boos"],
             comment_count=item["comment_count"],
@@ -129,7 +143,9 @@ async def ptt_search(
             "latest_score": post.latest_score,
         })
 
-    operators_used = {}
+    await log_crawl_finish(crawl_log, posts_fetched=len(results), posts_new=new_count, error_msg=error_msg)
+
+    operators_used: dict = {}
     if min_recommend is not None:
         operators_used["recommend"] = min_recommend
 
