@@ -1,12 +1,11 @@
-"""Shared UPSERT helpers for posts and search_queries."""
+"""Shared UPSERT helpers for posts, search_queries, and crawl_log."""
 
-from datetime import UTC, datetime, date
+from datetime import UTC, date, datetime
 
 from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from wind_vane.db.models import Post, SearchQuery
+from wind_vane.db.models import CrawlLog, Post, SearchQuery
 from wind_vane.rules.engine import apply_rules
 
 
@@ -37,6 +36,30 @@ def _update_pushes_history(
         dates = dates[-10:]
 
     return ";".join(history), ";".join(dates)
+
+
+async def log_crawl_start(
+    session: AsyncSession,
+    forum_id: int | None,
+    tool_name: str,
+    query_keyword: str | None = None,
+) -> CrawlLog:
+    entry = CrawlLog(forum_id=forum_id, tool_name=tool_name, query_keyword=query_keyword)
+    session.add(entry)
+    await session.flush()
+    return entry
+
+
+async def log_crawl_finish(
+    crawl_log: CrawlLog,
+    posts_fetched: int,
+    posts_new: int,
+    error_msg: str | None = None,
+) -> None:
+    crawl_log.finished_at = datetime.now(UTC)
+    crawl_log.posts_fetched = posts_fetched
+    crawl_log.posts_new = posts_new
+    crawl_log.error_msg = error_msg
 
 
 async def upsert_post(
