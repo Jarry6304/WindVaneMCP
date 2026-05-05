@@ -10,8 +10,19 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TIMESTAMPTZ, VARCHAR
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, VARCHAR
+from sqlalchemy.dialects.postgresql import TIMESTAMP as _PGTIMESTAMP
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+# TIMESTAMPTZ: PostgreSQL TIMESTAMP WITH TIME ZONE
+# Defined here so the test conftest can patch it with sqlalchemy.DateTime for SQLite
+
+
+class TIMESTAMPTZ(_PGTIMESTAMP):
+    """TIMESTAMP WITH TIME ZONE — subclass so SQLite conftest can monkey-patch."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(timezone=True)
 
 
 class Base(DeclarativeBase):

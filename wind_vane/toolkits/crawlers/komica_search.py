@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import structlog
 from crawlee import Request
-from crawlee.beautifulsoup_crawler import BeautifulSoupCrawler, BeautifulSoupCrawlingContext
+from crawlee.crawlers import BeautifulSoupCrawler, BeautifulSoupCrawlingContext
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,7 +21,8 @@ KOMICA_BASE = "https://www.komica.org"
 
 
 def _matches_keyword(title: str, content: str, kw_lower: str) -> bool:
-    return kw_lower in title.lower() or kw_lower in content.lower()
+    kw = kw_lower.lower()
+    return kw in title.lower() or kw in content.lower()
 
 
 def _extract_thread(thread_tag) -> dict | None:

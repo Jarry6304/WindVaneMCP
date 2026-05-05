@@ -1,24 +1,25 @@
 {
-  "_comment": "Copy the 'wind-vane' entry into your Claude Desktop config.json (mcpServers section). Adjust paths and credentials for your environment.",
+  "_comment": "Copy the 'wind-vane' entry into %APPDATA%\\Claude\\claude_desktop_config.json (inside mcpServers). Adjust all paths and credentials for your environment.",
   "mcpServers": {
     "wind-vane": {
-      "command": "uv",
+      "command": "C:\\Users\\jarry\\.local\\bin\\uv.exe",
       "args": [
         "--directory",
-        "C:\\Users\\YourName\\WindVaneMCP",
+        "D:\\projects\\wind-vane-mcp",
         "run",
         "python",
         "-m",
         "wind_vane.server"
       ],
       "env": {
-        "DATABASE_URL": "postgresql+asyncpg://windvane:password@localhost:5432/windvane",
-        "NOTIFIER_EMAIL_TO": "you@example.com",
-        "NOTIFIER_EMAIL_FROM": "windvane@example.com",
-        "SMTP_HOST": "smtp.example.com",
+        "DATABASE_URL": "postgresql+asyncpg://postgres:password@localhost:5432/wind_vane",
+        "PLAYWRIGHT_BROWSERS_PATH": "C:\\Users\\jarry\\AppData\\Local\\ms-playwright",
+        "NOTIFIER_EMAIL_TO": "jarry@example.com",
+        "NOTIFIER_EMAIL_FROM": "wind-vane-notifier@localhost",
+        "SMTP_HOST": "smtp.gmail.com",
         "SMTP_PORT": "587",
-        "SMTP_USERNAME": "windvane@example.com",
-        "SMTP_PASSWORD": "your_smtp_password",
+        "SMTP_USERNAME": "your-gmail@gmail.com",
+        "SMTP_PASSWORD": "your-gmail-app-password",
         "SMTP_USE_TLS": "true",
         "NOTIFIER_ENABLED": "true"
       }

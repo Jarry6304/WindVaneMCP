@@ -6,7 +6,7 @@ from urllib.parse import quote
 
 import structlog
 from crawlee import Request
-from crawlee.playwright_crawler import PlaywrightCrawler, PlaywrightCrawlingContext
+from crawlee.crawlers import PlaywrightCrawler, PlaywrightCrawlingContext
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 

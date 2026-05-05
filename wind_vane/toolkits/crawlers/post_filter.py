@@ -58,7 +58,8 @@ async def post_filter(
         affinity_map = {a.keyword_id: a.affinity_score for a in affinities}
 
     # ── Hard-reject: title too short ──────────────────────────────────────────
-    if len(title) < 5:
+    # Use 3 as minimum: accepts 4-char Chinese titles like "戰鬥陀螺" while blocking junk
+    if len(title.strip()) < 3:
         return {"passed": False, "score": 0, "matched_keywords": [], "reason": "title too short"}
 
     # ── Hard-reject: blacklist ────────────────────────────────────────────────
