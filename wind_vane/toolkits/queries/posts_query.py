@@ -1,13 +1,29 @@
-"""posts_query — pure DB query, no crawling."""
+"""posts_query — pure DB query, no crawling.
+
+Keyword filter uses PostgreSQL full-text search (GIN index).
+On other dialects (e.g., SQLite in tests) it falls back to LIKE matching.
+"""
 
 from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import and_, select, text
+from sqlalchemy import and_, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from wind_vane.db.models import Forum, ForumBoard, Post
+
+
+def _keyword_condition(keywords: list[str], dialect_name: str):
+    """Return a WHERE condition for keyword search, dialect-aware."""
+    if dialect_name == "postgresql":
+        kw_expr = " | ".join(keywords)
+        return text(
+            "to_tsvector('simple', title || ' ' || COALESCE(content, '')) "
+            "@@ to_tsquery('simple', :kw)"
+        ).bindparams(kw=kw_expr)
+    # Fallback: LIKE on title (SQLite / testing)
+    return or_(*(Post.title.ilike(f"%{kw}%") for kw in keywords))
 
 
 async def posts_query(
@@ -36,7 +52,8 @@ async def posts_query(
         conditions.append(Post.board_id.in_(board_ids))
 
     if posted_after:
-        conditions.append(Post.posted_at >= posted_after)
+        dt = posted_after.replace(tzinfo=None) if posted_after.tzinfo else posted_after
+        conditions.append(Post.posted_at >= dt)
 
     if min_pushes is not None:
         conditions.append(Post.pushes >= min_pushes)
@@ -45,18 +62,13 @@ async def posts_query(
         conditions.append(Post.latest_score >= min_score)
 
     if keywords:
-        kw_expr = " | ".join(keywords)
-        conditions.append(
-            text(
-                f"to_tsvector('simple', title || ' ' || COALESCE(content, '')) "
-                f"@@ to_tsquery('simple', :kw)"
-            ).bindparams(kw=kw_expr)
-        )
+        conn = await session.connection()
+        conditions.append(_keyword_condition(keywords, conn.dialect.name))
 
     if conditions:
         stmt = stmt.where(and_(*conditions))
 
-    stmt = stmt.order_by(Post.posted_at.desc()).limit(limit)
+    stmt = stmt.order_by(Post.posted_at.desc().nulls_last()).limit(limit)
     rows = (await session.execute(stmt)).scalars().all()
 
     return [

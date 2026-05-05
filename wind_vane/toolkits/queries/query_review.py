@@ -12,14 +12,14 @@ from wind_vane.db.models import SearchQuery
 
 async def query_review(
     session: AsyncSession,
-    filter: str = "needs_optimization",
+    filter_type: str = "needs_optimization",
     limit: int = 20,
 ) -> list[dict]:
     stmt = select(SearchQuery)
 
-    if filter == "needs_optimization":
+    if filter_type == "needs_optimization":
         stmt = stmt.where(SearchQuery.needs_optimization.is_(True))
-    elif filter == "deprecated":
+    elif filter_type == "deprecated":
         stmt = stmt.where(SearchQuery.status == "deprecated")
 
     stmt = stmt.order_by(SearchQuery.last_used_at.desc()).limit(limit)

@@ -182,12 +182,12 @@ async def tool_query_recommendations(
 
 @mcp.tool()
 async def tool_query_review(
-    filter: str = "needs_optimization",
+    filter_type: str = "needs_optimization",
     limit: int = 20,
 ) -> list[dict]:
-    """List search queries by status. filter: 'needs_optimization', 'deprecated', or 'all'."""
+    """List search queries by status. filter_type: 'needs_optimization', 'deprecated', or 'all'."""
     async with AsyncSessionLocal() as session:
-        return await query_review(session, filter, limit)
+        return await query_review(session, filter_type, limit)
 
 
 @mcp.tool()
